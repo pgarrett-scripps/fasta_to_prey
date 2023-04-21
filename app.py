@@ -27,23 +27,29 @@ if uploaded_file is not None:
 
     records_dict = read_file(StringIO(uploaded_file.getvalue().decode('utf-8')))
 
+
+    total_record_count, valid_record_count, converted_record_count, unknown_gn_record_count = 0, 0, 0, 0
+    c1, c2, c3, c4, c5 = st.columns(5)
     data = {'unique_identifier': [], 'protein_length': [], 'gene_name': []}
 
-    with st.expander('Conversion Warnings:'):
+    with st.expander('Warnings:'):
 
-        prey_lines = []
         for key in records_dict:
             record = records_dict[key]
+
+            total_record_count += 1
 
             # Skip reverse and contaminant record
             if 'Reverse'.casefold() in record.name.casefold() or 'contaminant'.casefold() in record.name.casefold():
                 continue
 
+            valid_record_count += 1
+
             # Try to parse db, unique_identifier, entry_name from record
             try:
                 db, unique_identifier, entry_name = record.name.split('|')
             except ValueError as e:
-                st.error(f'Cannot parse db|unique_identifier|entry_name from record.name: {record.name}')
+                st.warning(f'Cannot parse db|unique_identifier|entry_name from record.name: {record.name}')
                 continue
 
             gene_name = 'unknown'
@@ -51,10 +57,24 @@ if uploaded_file is not None:
                 gene_name = extract_gn(record.description)
             except ValueError as e:
                 st.warning(f'Cannot parse GN from protein record.description: {record.description}')
+                unknown_gn_record_count += 1
 
             data['unique_identifier'].append(unique_identifier)
             data['protein_length'].append(len(record.seq))
             data['gene_name'].append(gene_name)
+
+            converted_record_count += 1
+
+    c1.metric(label='Total Records', value=total_record_count,
+              help='The total number of records found in the FASTA file.')
+    c2.metric(label='Valid Records', value=valid_record_count,
+              help='The number of records that are neither Reverse nor Contaminant records.')
+    c3.metric(label='Converted Records', value=converted_record_count,
+              help='The number of records that have been successfully included in the Prey file.')
+    c4.metric(label='Skipped Records', value=valid_record_count - converted_record_count,
+              help='The number of records that were skipped due to an invalid unique identifier.')
+    c5.metric(label='Unknown GN Records', value=unknown_gn_record_count,
+              help='The number of records that do not have a GN (Gene Name) value associated with them.')
 
     if len(data['unique_identifier']) > 0:
         st.write("Prey file content generated. Download the prey file below:")
@@ -82,5 +102,3 @@ if uploaded_file is not None:
         st.error("No valid prey file content found.")
 else:
     st.info("Please upload a .fasta file.")
-
-
